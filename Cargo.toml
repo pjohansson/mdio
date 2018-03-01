@@ -1,0 +1,8 @@
+[package]
+name = "mdio"
+version = "0.1.0"
+authors = ["Petter Johansson <pettjoha@kth.se>"]
+
+[dependencies]
+"failure" = "0.1"
+"failure_derive" = "0.1"
