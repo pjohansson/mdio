@@ -1,7 +1,35 @@
 use conf::{Atom, Conf, get_or_insert_atom_and_residue};
 use rvec::{RVec, ParseRVecError};
 
-use std::io::{BufRead, BufReader, Read};
+use std::io;
+use std::io::{BufRead, BufReader, Read, Write};
+
+pub fn write_gromos87_conf<W: Write>(conf: &Conf, mut writer: &mut W) -> Result<(), WriteError> {
+    write!(&mut writer, "{}\n{}\n", conf.title, conf.atoms.len())?;
+
+    let mut atom_num = 0;
+
+    for (res_num, residue) in conf.iter_residues().enumerate() {
+        for atom in residue.map_err(|_| WriteError::BadResidue(res_num + 1))?.iter() {
+            atom_num += 1;
+            write!(&mut writer, "{:>5}{:<5}{:>5}{:>5}{:>8.3}{:>8.3}{:>8.3}",
+                res_num + 1, atom.residue.borrow().name, *atom.name.borrow(), atom_num,
+                atom.position.x, atom.position.y, atom.position.z)?;
+
+            if let Some(velocity) = atom.velocity {
+                write!(&mut writer, "{:>8.3}{:>8.3}{:>8.3}",
+                    velocity.x, velocity.y, velocity.z)?;
+            }
+
+            write!(&mut writer, "\n")?;
+        }
+    }
+
+    write!(&mut writer, "{:12.3} {:12.3} {:12.3}",
+        conf.size.x, conf.size.y, conf.size.z)?;
+
+    Ok(())
+}
 
 struct Line<'a> {
     // residue_number: usize,
@@ -13,7 +41,21 @@ struct Line<'a> {
 }
 
 #[derive(Debug, Fail)]
-pub enum IoError {
+pub enum WriteError {
+    #[fail(display = "Error writing configuration ({})", _0)]
+    IoError(io::Error),
+    #[fail(display = "Error writing residue {}, which was incomplete", _0)]
+    BadResidue(usize),
+}
+
+impl From<io::Error> for WriteError {
+    fn from(err: io::Error) -> WriteError {
+        WriteError::IoError(err)
+    }
+}
+
+#[derive(Debug, Fail)]
+pub enum ReadError {
     #[fail(display = "Could not read line {}: invalid UTF-8", _0)]
     Utf8Error(usize),
     #[fail(display = "Expected a configuration title at line 1")]
@@ -32,28 +74,28 @@ pub enum IoError {
     BoxSizeError(usize),
 }
 
-pub fn read_gromos87_conf<R: Read>(reader: R) -> Result<Conf, IoError> {
+pub fn read_gromos87_conf<R: Read>(reader: R) -> Result<Conf, ReadError> {
     let mut buf_reader = BufReader::new(reader);
     let mut buf = String::new();
 
-    buf_reader.read_line(&mut buf).map_err(|_| IoError::Utf8Error(1))?;
+    buf_reader.read_line(&mut buf).map_err(|_| ReadError::Utf8Error(1))?;
     let title = buf.trim().to_string();
     buf.clear();
 
-    buf_reader.read_line(&mut buf).map_err(|_| IoError::Utf8Error(1))?;
-    let num_atoms = buf.trim().parse::<usize>().map_err(|_| IoError::NumAtomsError)?;
+    buf_reader.read_line(&mut buf).map_err(|_| ReadError::Utf8Error(1))?;
+    let num_atoms = buf.trim().parse::<usize>().map_err(|_| ReadError::NumAtomsError)?;
     buf.clear();
 
     let mut residues = Vec::new();
     let mut atoms = Vec::new();
 
     for i in 0..num_atoms {
-        buf_reader.read_line(&mut buf).map_err(|_| IoError::Utf8Error(2 + i))?;
+        buf_reader.read_line(&mut buf).map_err(|_| ReadError::Utf8Error(2 + i))?;
 
-        let atom_line = parse_atom_line(&buf).map_err(|_| IoError::LineError(2 + i))?;
+        let atom_line = parse_atom_line(&buf).map_err(|_| ReadError::LineError(2 + i))?;
         let (residue, atom) = get_or_insert_atom_and_residue(
                 atom_line.residue_name, atom_line.atom_name, &mut residues
-            ).map_err(|_| IoError::LineError(2 + i))?;;
+            ).map_err(|_| ReadError::LineError(2 + i))?;;
 
         atoms.push(Atom {
             name: atom,
@@ -65,11 +107,12 @@ pub fn read_gromos87_conf<R: Read>(reader: R) -> Result<Conf, IoError> {
         buf.clear();
     }
 
-    buf_reader.read_line(&mut buf).map_err(|_| IoError::Utf8Error(3 + num_atoms))?;
+    buf_reader.read_line(&mut buf).map_err(|_| ReadError::Utf8Error(3 + num_atoms))?;
     let size = RVec::from_whitespace(&buf).expect("could not read box size");
 
     Ok(Conf {
         title,
+        origin: RVec { x: 0.0, y: 0.0, z: 0.0 },
         size,
         residues,
         atoms,
@@ -111,6 +154,9 @@ fn parse_atom_line(line: &str) -> Result<Line, ParseLineError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use conf::{Atom, Conf, Residue};
+    use std::cell::RefCell;
+    use std::io::Cursor;
     use std::rc::Rc;
 
     #[test]
@@ -196,6 +242,7 @@ mod tests {
 
         assert_eq!(conf.title, title);
         assert_eq!(conf.atoms.len(), 4);
+        assert_eq!(conf.origin, RVec { x: 0.0, y: 0.0, z: 0.0 });
         assert_eq!(conf.size, size);
 
         // Verify that all residues were correctly constructed
@@ -245,5 +292,64 @@ mod tests {
 
         let content = format!("{}\n{}\n{}", "No number of atoms line", two_atom_lines, size_line);
         assert!(read_gromos87_conf(content.as_bytes()).is_err());
+    }
+
+    #[test]
+    fn write_conf_with_two_different_residues_to_buffer() {
+        let residues = vec![
+            Rc::new(RefCell::new(Residue {
+                name: "RES1".to_string(),
+                atoms: vec![Rc::new(RefCell::new("AT1".to_string()))],
+            })),
+            Rc::new(RefCell::new(Residue {
+                name: "RES2".to_string(),
+                atoms: vec![Rc::new(RefCell::new("AT2".to_string()))],
+            })),
+        ];
+
+        let conf = Conf {
+            title: "A title".to_string(),
+            origin: RVec { x: 1.0, y: 2.0, z: 3.0 },
+            size: RVec { x: 10.0, y: 20.0, z: 30.0 },
+            residues: residues.clone(),
+            atoms: vec![
+                // Residue 2
+                Atom {
+                    name: Rc::clone(&residues[1].borrow().atoms[0]),
+                    residue: Rc::clone(&residues[1]),
+                    position: RVec { x: 0.0, y: 1.0, z: 2.0 },
+                    velocity: Some(RVec { x: 0.0, y: 0.1, z: 0.2 }),
+                },
+                // Residue 1
+                Atom {
+                    name: Rc::clone(&residues[0].borrow().atoms[0]),
+                    residue: Rc::clone(&residues[0]),
+                    position: RVec { x: 3.0, y: 4.0, z: 5.0 },
+                    velocity: Some(RVec { x: 0.3, y: 0.4, z: 0.5 }),
+                },
+            ]
+        };
+
+        // Write the configuration to a buffer
+        let mut buf = Cursor::new(Vec::<u8>::new());
+        assert!(write_gromos87_conf(&conf, &mut buf).is_ok());
+
+        // Verify that we get the same configuration back after reading the output
+        buf.set_position(0);
+        let read_conf = read_gromos87_conf(buf).unwrap();
+
+        assert_eq!(read_conf.title, conf.title);
+        assert_eq!(read_conf.origin, RVec { x: 0.0, y: 0.0, z: 0.0 });
+        assert_eq!(read_conf.size, conf.size);
+
+        assert_eq!(read_conf.residues.len(), 2);
+        assert_eq!(read_conf.atoms.len(), conf.atoms.len());
+
+        for (read_atom, atom) in read_conf.atoms.iter().zip(conf.atoms.iter()) {
+            assert_eq!(*read_atom.name.borrow(), *atom.name.borrow());
+            assert_eq!(*read_atom.residue.borrow().name, *atom.residue.borrow().name);
+            assert_eq!(read_atom.position, atom.position);
+            assert_eq!(read_atom.velocity.unwrap(), atom.velocity.unwrap());
+        }
     }
 }

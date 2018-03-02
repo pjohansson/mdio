@@ -1,10 +1,10 @@
-use error::ReadError;
+use error::{ReadError, WriteError};
 use gromos87;
 use rvec::RVec;
 
 use std::cell::RefCell;
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, BufWriter};
 // use std::ops::Deref;
 use std::path::Path;
 use std::rc::Rc;
@@ -14,6 +14,8 @@ use std::rc::Rc;
 pub struct Conf {
     /// Configuration title.
     pub title: String,
+    /// Origin of configuration.
+    pub origin: RVec,
     /// Size of configuration.
     pub size: RVec,
     /// A list of residues which exist in the configuration.
@@ -40,6 +42,44 @@ impl Conf {
             index: 0,
             atoms: &self.atoms,
         }
+    }
+
+    /// Extend the configuration along each direction by copying and translating the atoms.
+    pub fn pbc_multiply(&self, nx: usize, ny: usize, nz: usize) -> Conf {
+        let mut conf = Conf {
+            title: self.title.clone(),
+            origin: self.origin.clone(),
+            size: self.size.pbc_multiply(nx, ny, nz),
+            residues: self.residues.clone(),
+            atoms: Vec::new(),
+        };
+
+        for ix in 1..(nx + 1) {
+            for iy in 1..(ny + 1) {
+                for iz in 1..(nz + 1) {
+                    let dr = self.size.pbc_multiply(ix, iy, iz);
+
+                    self.atoms.iter().for_each(|atom| {
+                        conf.atoms.push(Atom {
+                            name: Rc::clone(&atom.name),
+                            residue: Rc::clone(&atom.residue),
+                            position: atom.position + dr,
+                            velocity: atom.velocity.clone(),
+                        });
+                    });
+                }
+            }
+        }
+
+        conf
+    }
+
+    /// Write the configuration to a GROMOS87 formatted file.
+    pub fn write_gromos87(&self, path: &Path) -> Result<(), WriteError> {
+        let file = File::create(path)?;
+        let mut writer = BufWriter::new(file);
+
+        gromos87::write_gromos87_conf(self, &mut writer).map_err(|err| WriteError::Gromos87(err))
     }
 }
 
@@ -273,6 +313,7 @@ mod tests {
     fn residue_iter_on_empty_conf_returns_none() {
         let conf = Conf {
             title: "A title".to_string(),
+            origin: RVec { x: 0.0, y: 0.0, z: 0.0 },
             size: RVec { x: 0.0, y: 0.0, z: 0.0 },
             residues: Vec::new(),
             atoms: Vec::new(),
@@ -298,6 +339,7 @@ mod tests {
 
         let conf = Conf {
             title: "A title".to_string(),
+            origin: RVec { x: 0.0, y: 0.0, z: 0.0 },
             size: RVec { x: 0.0, y: 0.0, z: 0.0 },
             residues: residues.clone(),
             atoms: vec![
@@ -351,6 +393,7 @@ mod tests {
 
         let conf = Conf {
             title: "A title".to_string(),
+            origin: RVec { x: 0.0, y: 0.0, z: 0.0 },
             size: RVec { x: 0.0, y: 0.0, z: 0.0 },
             residues: residues.clone(),
             atoms: vec![
@@ -399,6 +442,7 @@ mod tests {
 
         let conf = Conf {
             title: "A title".to_string(),
+            origin: RVec { x: 0.0, y: 0.0, z: 0.0 },
             size: RVec { x: 0.0, y: 0.0, z: 0.0 },
             residues: residues.clone(),
             atoms: vec![
@@ -474,6 +518,7 @@ mod tests {
 
         let conf = Conf {
             title: "A title".to_string(),
+            origin: RVec { x: 0.0, y: 0.0, z: 0.0 },
             size: RVec { x: 0.0, y: 0.0, z: 0.0 },
             residues: residues.clone(),
             atoms: vec![
@@ -602,6 +647,7 @@ mod tests {
 
         let conf = Conf {
             title: "System".to_string(),
+            origin: RVec { x: 0.0, y: 0.0, z: 0.0 },
             size: RVec { x: 1.0, y: 2.0, z: 3.0 },
             residues: residues.clone(),
             atoms,
@@ -635,5 +681,66 @@ mod tests {
         assert_eq!(res5[1].velocity, None);
 
         assert!(iter.next().is_none());
+    }
+
+    #[test]
+    fn multiply_conf_to_extend_it() {
+        let size = RVec { x: 10.0, y: 20.0, z: 30.0 };
+
+        let residues = vec![
+            Rc::new(RefCell::new(Residue {
+                name: "RES1".to_string(),
+                atoms: vec![Rc::new(RefCell::new("AT1".to_string()))],
+            })),
+            Rc::new(RefCell::new(Residue {
+                name: "RES2".to_string(),
+                atoms: vec![Rc::new(RefCell::new("AT2".to_string()))],
+            })),
+        ];
+
+        let conf = Conf {
+            title: "A title".to_string(),
+            origin: RVec { x: 0.0, y: 0.0, z: 0.0 },
+            size,
+            residues: residues.clone(),
+            atoms: vec![
+                Atom {
+                    name: Rc::clone(&residues[1].borrow().atoms[0]),
+                    residue: Rc::clone(&residues[1]),
+                    position: RVec { x: 0.0, y: 1.0, z: 2.0 },
+                    velocity: Some(RVec { x: 0.0, y: 0.1, z: 0.2 }),
+                },
+                Atom {
+                    name: Rc::clone(&residues[0].borrow().atoms[0]),
+                    residue: Rc::clone(&residues[0]),
+                    position: RVec { x: 3.0, y: 4.0, z: 5.0 },
+                    velocity: Some(RVec { x: 0.3, y: 0.4, z: 0.5 }),
+                },
+            ]
+        };
+
+        let (nx, ny, nz) = (2, 3, 4);
+        let multiplied_conf = conf.pbc_multiply(nx, ny, nz);
+
+        assert_eq!(multiplied_conf.size,
+            RVec { x: 10.0 * (nx as f64), y: 20.0 * (ny as f64), z: 30.0 * (nz as f64) }
+        );
+        assert_eq!(multiplied_conf.atoms.len(), conf.atoms.len() * nx * ny * nz);
+
+        // The final atom should be from the maximum (nx, ny, nz) image
+        assert!(Rc::ptr_eq(
+            &multiplied_conf.atoms.last().unwrap().name, &conf.atoms.last().unwrap().name
+        ));
+        assert!(Rc::ptr_eq(
+            &multiplied_conf.atoms.last().unwrap().residue, &conf.atoms.last().unwrap().residue
+        ));
+        assert_eq!(
+            multiplied_conf.atoms.last().unwrap().position,
+            conf.atoms.last().unwrap().position + conf.size.pbc_multiply(nx, ny, nz)
+        );
+        assert_eq!(
+            multiplied_conf.atoms.last().unwrap().velocity,
+            conf.atoms.last().unwrap().velocity
+        );
     }
 }
