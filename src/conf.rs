@@ -10,7 +10,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 /// A system configuration.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Conf {
     /// Configuration title.
     pub title: String,
@@ -143,10 +143,10 @@ impl<'a> Iterator for ResidueIter<'a> {
 }
 
 /// Information about a residue.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Residue {
     /// The residue name.
-    pub name: String,
+    pub name: Rc<RefCell<String>>,
     /// Atoms which belong to the residue.
     pub atoms: Vec<Rc<RefCell<String>>>,
 }
@@ -167,7 +167,7 @@ impl Residue {
 }
 
 /// A single atom belonging to a residue in the configuration.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Atom {
     /// A reference to the atom name. Should point to an atom in the `residue`.
     pub name: Rc<RefCell<String>>,
@@ -183,11 +183,11 @@ pub struct Atom {
 fn get_or_insert_residue(name: &str, residues: &mut Vec<Rc<RefCell<Residue>>>)
         -> Rc<RefCell<Residue>> {
     residues.iter()
-            .find(|res| &res.borrow().name == name)
+            .find(|res| *res.borrow().name.borrow() == name)
             .cloned()
             .unwrap_or_else(|| {
                 let res = Rc::new(RefCell::new(Residue {
-                    name: String::from(name),
+                    name: Rc::new(RefCell::new(String::from(name))),
                     atoms: Vec::new(),
                 }));
 
@@ -218,7 +218,7 @@ mod tests {
         let res1_name = "RES1";
         let res1 = get_or_insert_residue(res1_name, &mut residues);
 
-        assert_eq!(&res1.borrow().name, res1_name);
+        assert_eq!(*res1.borrow().name.borrow(), res1_name);
         assert!(&res1.borrow().atoms.is_empty());
 
         assert_eq!(residues.len(), 1);
@@ -230,7 +230,7 @@ mod tests {
         let res2_name = "RES2";
         let res2 = get_or_insert_residue(res2_name, &mut residues);
 
-        assert_eq!(&res2.borrow().name, res2_name);
+        assert_eq!(*res2.borrow().name.borrow(), res2_name);
         assert!(&res2.borrow().atoms.is_empty());
         assert!(!Rc::ptr_eq(&res1, &res2));
 
@@ -241,7 +241,7 @@ mod tests {
     #[test]
     fn get_or_insert_atom_from_residue() {
         let mut residue = Residue {
-            name: String::from("RES"),
+            name: Rc::new(RefCell::new(String::from("RES"))),
             atoms: Vec::new(),
         };
 
@@ -272,7 +272,7 @@ mod tests {
         let (res1, atom1) = get_or_insert_atom_and_residue(
             res1_name, atom1_name, &mut residues).unwrap();
 
-        assert_eq!(&res1.borrow().name, res1_name);
+        assert_eq!(*res1.borrow().name.borrow(), res1_name);
         assert_eq!(&*atom1.borrow(), &atom1_name);
         assert!(Rc::ptr_eq(&atom1, &res1.borrow().atoms[0]));
 
@@ -290,7 +290,7 @@ mod tests {
             res2_name, atom3_name, &mut residues).unwrap();
 
         assert!(!Rc::ptr_eq(&res1, &res2));
-        assert_eq!(&res2.borrow().name, res2_name);
+        assert_eq!(*res2.borrow().name.borrow(), res2_name);
         assert_eq!(&*atom3.borrow(), &atom3_name);
 
         // An atom with a name of another residue can be added, they will not be the same
@@ -328,11 +328,11 @@ mod tests {
     fn residue_iter_over_two_atoms_of_different_residues() {
         let residues = vec![
             Rc::new(RefCell::new(Residue {
-                name: "RES1".to_string(),
+                name: Rc::new(RefCell::new("RES1".to_string())),
                 atoms: vec![Rc::new(RefCell::new("AT1".to_string()))],
             })),
             Rc::new(RefCell::new(Residue {
-                name: "RES2".to_string(),
+                name: Rc::new(RefCell::new("RES2".to_string())),
                 atoms: vec![Rc::new(RefCell::new("AT2".to_string()))],
             })),
         ];
@@ -383,7 +383,7 @@ mod tests {
     fn iterate_over_a_residue_with_several_atoms() {
         let residues = vec![
             Rc::new(RefCell::new(Residue {
-                name: "RES1".to_string(),
+                name: Rc::new(RefCell::new("RES1".to_string())),
                 atoms: vec![
                     Rc::new(RefCell::new("AT1".to_string())),
                     Rc::new(RefCell::new("AT2".to_string()))
@@ -432,7 +432,7 @@ mod tests {
     fn iterating_over_residues_ensures_that_all_are_consistent() {
         let residues = vec![
             Rc::new(RefCell::new(Residue {
-                name: "RES1".to_string(),
+                name: Rc::new(RefCell::new("RES1".to_string())),
                 atoms: vec![
                     Rc::new(RefCell::new("AT1".to_string())),
                     Rc::new(RefCell::new("AT2".to_string()))
@@ -508,7 +508,7 @@ mod tests {
     fn iterating_over_residues_ensures_that_they_are_ordered() {
         let residues = vec![
             Rc::new(RefCell::new(Residue {
-                name: "RES1".to_string(),
+                name: Rc::new(RefCell::new("RES1".to_string())),
                 atoms: vec![
                     Rc::new(RefCell::new("AT1".to_string())),
                     Rc::new(RefCell::new("AT2".to_string()))
@@ -578,14 +578,14 @@ mod tests {
     fn iterate_over_several_different_residues() {
         let residues = vec![
             Rc::new(RefCell::new(Residue {
-                name: "RES1".to_string(),
+                name: Rc::new(RefCell::new("RES1".to_string())),
                 atoms: vec![
                     Rc::new(RefCell::new("AT1".to_string())),
                     Rc::new(RefCell::new("At2".to_string())),
                 ],
             })),
             Rc::new(RefCell::new(Residue {
-                name: "RES2".to_string(),
+                name: Rc::new(RefCell::new("RES2".to_string())),
                 atoms: vec![
                     Rc::new(RefCell::new("AT3".to_string())),
                 ],
@@ -689,11 +689,11 @@ mod tests {
 
         let residues = vec![
             Rc::new(RefCell::new(Residue {
-                name: "RES1".to_string(),
+                name: Rc::new(RefCell::new("RES1".to_string())),
                 atoms: vec![Rc::new(RefCell::new("AT1".to_string()))],
             })),
             Rc::new(RefCell::new(Residue {
-                name: "RES2".to_string(),
+                name: Rc::new(RefCell::new("RES2".to_string())),
                 atoms: vec![Rc::new(RefCell::new("AT2".to_string()))],
             })),
         ];

@@ -13,7 +13,7 @@ pub fn write_gromos87_conf<W: Write>(conf: &Conf, mut writer: &mut W) -> Result<
         for atom in residue.map_err(|_| WriteError::BadResidue(res_num + 1))?.iter() {
             atom_num += 1;
             write!(&mut writer, "{:>5}{:<5}{:>5}{:>5}{:>8.3}{:>8.3}{:>8.3}",
-                res_num + 1, atom.residue.borrow().name, *atom.name.borrow(), atom_num,
+                res_num + 1, atom.residue.borrow().name.borrow(), *atom.name.borrow(), atom_num,
                 atom.position.x, atom.position.y, atom.position.z)?;
 
             if let Some(velocity) = atom.velocity {
@@ -247,8 +247,8 @@ mod tests {
 
         // Verify that all residues were correctly constructed
         assert_eq!(conf.residues.len(), 2);
-        assert_eq!(conf.residues[0].borrow().name, res1_name);
-        assert_eq!(conf.residues[1].borrow().name, res2_name);
+        assert_eq!(*conf.residues[0].borrow().name.borrow(), res1_name);
+        assert_eq!(*conf.residues[1].borrow().name.borrow(), res2_name);
 
         assert_eq!(conf.residues[0].borrow().atoms.len(), 2);
         assert_eq!(&*conf.residues[0].borrow().atoms[0].borrow(), atom1_name);
@@ -298,11 +298,11 @@ mod tests {
     fn write_conf_with_two_different_residues_to_buffer() {
         let residues = vec![
             Rc::new(RefCell::new(Residue {
-                name: "RES1".to_string(),
+                name: Rc::new(RefCell::new("RES1".to_string())),
                 atoms: vec![Rc::new(RefCell::new("AT1".to_string()))],
             })),
             Rc::new(RefCell::new(Residue {
-                name: "RES2".to_string(),
+                name: Rc::new(RefCell::new("RES2".to_string())),
                 atoms: vec![Rc::new(RefCell::new("AT2".to_string()))],
             })),
         ];
