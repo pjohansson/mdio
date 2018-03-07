@@ -57,7 +57,7 @@ impl Conf {
         for ix in 1..(nx + 1) {
             for iy in 1..(ny + 1) {
                 for iz in 1..(nz + 1) {
-                    let dr = self.size.pbc_multiply(ix, iy, iz);
+                    let dr = self.size.pbc_multiply(ix - 1, iy - 1, iz - 1);
 
                     self.atoms.iter().for_each(|atom| {
                         conf.atoms.push(Atom {
@@ -736,7 +736,7 @@ mod tests {
         ));
         assert_eq!(
             multiplied_conf.atoms.last().unwrap().position,
-            conf.atoms.last().unwrap().position + conf.size.pbc_multiply(nx, ny, nz)
+            conf.atoms.last().unwrap().position + conf.size.pbc_multiply(nx - 1, ny - 1, nz - 1)
         );
         assert_eq!(
             multiplied_conf.atoms.last().unwrap().velocity,

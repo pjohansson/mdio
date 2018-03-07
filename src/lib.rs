@@ -8,5 +8,5 @@ mod error;
 mod gromos87;
 mod rvec;
 
-pub use conf::{Conf, Atom, Residue, ResidueIter};
+pub use conf::{Conf, Atom, Residue, ResidueIter, get_or_insert_atom_and_residue};
 pub use rvec::RVec;

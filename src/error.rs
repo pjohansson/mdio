@@ -4,9 +4,9 @@ use std::io;
 
 #[derive(Debug, Fail)]
 pub enum WriteError {
-    #[fail(display = "Error writing GROMOS87 file ({})", _0)]
+    #[fail(display = "Could not write GROMOS87 file ({})", _0)]
     Gromos87(gromos87::WriteError),
-    #[fail(display = "Error: Could not open file for writing ({})", _0)]
+    #[fail(display = "Could not open file for writing ({})", _0)]
     IoError(io::Error),
 }
 
@@ -18,9 +18,9 @@ impl From<io::Error> for WriteError {
 
 #[derive(Debug, Fail)]
 pub enum ReadError {
-    #[fail(display = "Error reading GROMOS87 file ({})", _0)]
+    #[fail(display = "Could not read GROMOS87 file ({})", _0)]
     Gromos87(gromos87::ReadError),
-    #[fail(display = "Error: Could not open file for reading ({})", _0)]
+    #[fail(display = "Could not open file for reading ({})", _0)]
     IoError(io::Error),
 }
 
