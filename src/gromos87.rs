@@ -25,7 +25,7 @@ pub fn write_gromos87_conf<W: Write>(conf: &Conf, mut writer: &mut W) -> Result<
         }
     }
 
-    write!(&mut writer, "{:12.3} {:12.3} {:12.3}",
+    write!(&mut writer, " {:12.5} {:12.5} {:12.5}\n",
         conf.size.x, conf.size.y, conf.size.z)?;
 
     Ok(())
@@ -351,5 +351,27 @@ mod tests {
             assert_eq!(read_atom.position, atom.position);
             assert_eq!(read_atom.velocity.unwrap(), atom.velocity.unwrap());
         }
+    }
+
+    #[test]
+    fn box_size_is_written_in_a_fixed_format_with_leading_space_for_all_dimensions() {
+        let conf = Conf {
+            title: "A title".to_string(),
+            origin: RVec { x: 1.0, y: 2.0, z: 3.0 },
+            size: RVec { x: 10.0, y: 20.0, z: 30.0 },
+            residues: Vec::new(),
+            atoms: Vec::new(),
+        };
+
+        let mut buf = Cursor::new(Vec::<u8>::new());
+        assert!(write_gromos87_conf(&conf, &mut buf).is_ok());
+
+        buf.set_position(0);
+        let box_size_line = buf.lines().skip(2).next().unwrap().unwrap();
+
+        assert_eq!(
+            format!(" {:12.5} {:12.5} {:12.5}", conf.size.x, conf.size.y, conf.size.z),
+            box_size_line
+        );
     }
 }
