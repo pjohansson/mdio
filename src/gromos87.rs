@@ -10,10 +10,16 @@ pub fn write_gromos87_conf<W: Write>(conf: &Conf, mut writer: &mut W) -> Result<
     let mut atom_num = 0;
 
     for (res_num, residue) in conf.iter_residues().enumerate() {
+        // GROMOS-87 wraps indices at 5 digits, ie. at 100_000
+        let res_num_wrapped = (res_num + 1) % 100_000;
+
         for atom in residue.map_err(|_| WriteError::BadResidue(res_num + 1))?.iter() {
             atom_num += 1;
+            let atom_num_wrapped = atom_num % 100_000;
+
             write!(&mut writer, "{:>5}{:<5}{:>5}{:>5}{:>8.3}{:>8.3}{:>8.3}",
-                res_num + 1, atom.residue.borrow().name.borrow(), *atom.name.borrow(), atom_num,
+                res_num_wrapped, atom.residue.borrow().name.borrow(),
+                *atom.name.borrow(), atom_num_wrapped,
                 atom.position.x, atom.position.y, atom.position.z)?;
 
             if let Some(velocity) = atom.velocity {
@@ -373,5 +379,52 @@ mod tests {
             format!(" {:12.5} {:12.5} {:12.5}", conf.size.x, conf.size.y, conf.size.z),
             box_size_line
         );
+    }
+
+    #[test]
+    fn writing_residue_and_atom_numbers_wrap_at_100_000() {
+        let residues = vec![
+            Rc::new(RefCell::new(Residue {
+                name: Rc::new(RefCell::new("RES1".to_string())),
+                atoms: vec![Rc::new(RefCell::new("AT1".to_string()))],
+            })),
+        ];
+
+        let conf = Conf {
+            title: "A title".to_string(),
+            origin: RVec { x: 1.0, y: 2.0, z: 3.0 },
+            size: RVec { x: 10.0, y: 20.0, z: 30.0 },
+            residues: residues.clone(),
+
+            // Add 100_000 atoms, since indexing begins at 1 the last atom will wrap to 0!
+            atoms: vec![
+                Atom {
+                    name: Rc::clone(&residues[0].borrow().atoms[0]),
+                    residue: Rc::clone(&residues[0]),
+                    position: RVec { x: 0.0, y: 1.0, z: 2.0 },
+                    velocity: None,
+                }; 100_000
+            ]
+        };
+
+        // Write the configuration to a buffer
+        let mut buf = Cursor::new(Vec::<u8>::new());
+        assert!(write_gromos87_conf(&conf, &mut buf).is_ok());
+
+        buf.set_position(0);
+
+        // Two meta data lines, then 99_999 atom lines are skipped
+        let tail = buf.lines().skip(100_001).next().unwrap().unwrap();
+        let residue_num = &tail[0..5];
+        let atom_num = &tail[15..20];
+
+        assert_eq!(residue_num, "    0");
+        assert_eq!(atom_num,    "    0");
+
+        // Verify that the names are untouched
+        let residue_name = &tail[5..10];
+        let atom_name = &tail[10..15];
+        assert_eq!(residue_name, "RES1 ");
+        assert_eq!(atom_name, "  AT1");
     }
 }
