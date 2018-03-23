@@ -31,7 +31,11 @@ impl Conf {
     /// Assign a set of `ResidueIter` objects as the atoms of the configuration,
     /// replacing any atoms present in it.
     fn assign_residues(&mut self, residues: &[Vec<Atom>]) {
-        self.atoms = residues.iter().flat_map(|atoms| atoms.iter()).cloned().collect();
+        self.atoms = residues
+            .iter()
+            .flat_map(|atoms| atoms.iter())
+            .cloned()
+            .collect();
     }
 
     /// Read a configuration from a `Gromos87` formatted file.
@@ -106,7 +110,9 @@ pub struct ResidueIter<'a> {
 impl<'a> ResidueIter<'a> {
     fn get_iter_error(&mut self, i: usize) -> ResidueError {
         self.index += i;
-        ResidueError { index: self.index - i }
+        ResidueError {
+            index: self.index - i,
+        }
     }
 }
 
@@ -135,10 +141,10 @@ impl<'a> Iterator for ResidueIter<'a> {
                     }
 
                     atom_list.push(atom.clone());
-                },
+                }
                 None => {
                     return Some(Err(self.get_iter_error(i)));
-                },
+                }
             }
         }
 
@@ -186,26 +192,30 @@ pub struct Atom {
     pub velocity: Option<RVec>,
 }
 
-fn get_or_insert_residue(name: &str, residues: &mut Vec<Rc<RefCell<Residue>>>)
-        -> Rc<RefCell<Residue>> {
-    residues.iter()
-            .find(|res| *res.borrow().name.borrow() == name)
-            .cloned()
-            .unwrap_or_else(|| {
-                let res = Rc::new(RefCell::new(Residue {
-                    name: Rc::new(RefCell::new(String::from(name))),
-                    atoms: Vec::new(),
-                }));
+fn get_or_insert_residue(
+    name: &str,
+    residues: &mut Vec<Rc<RefCell<Residue>>>,
+) -> Rc<RefCell<Residue>> {
+    residues
+        .iter()
+        .find(|res| *res.borrow().name.borrow() == name)
+        .cloned()
+        .unwrap_or_else(|| {
+            let res = Rc::new(RefCell::new(Residue {
+                name: Rc::new(RefCell::new(String::from(name))),
+                atoms: Vec::new(),
+            }));
 
-                residues.push(res.clone());
-                res
-            })
+            residues.push(res.clone());
+            res
+        })
 }
 
-pub fn get_or_insert_atom_and_residue(residue_name: &str,
-                                      atom_name: &str,
-                                      residues: &mut Vec<Rc<RefCell<Residue>>>)
-        -> Result<(Rc<RefCell<Residue>>, Rc<RefCell<String>>), String> {
+pub fn get_or_insert_atom_and_residue(
+    residue_name: &str,
+    atom_name: &str,
+    residues: &mut Vec<Rc<RefCell<Residue>>>,
+) -> Result<(Rc<RefCell<Residue>>, Rc<RefCell<String>>), String> {
     let residue = get_or_insert_residue(residue_name, residues);
     let atom = residue.borrow_mut().get_or_insert_atom(atom_name);
 
@@ -275,16 +285,16 @@ mod tests {
         let res1_name = "RES1";
         let atom1_name = "AT1";
 
-        let (res1, atom1) = get_or_insert_atom_and_residue(
-            res1_name, atom1_name, &mut residues).unwrap();
+        let (res1, atom1) =
+            get_or_insert_atom_and_residue(res1_name, atom1_name, &mut residues).unwrap();
 
         assert_eq!(*res1.borrow().name.borrow(), res1_name);
         assert_eq!(&*atom1.borrow(), &atom1_name);
         assert!(Rc::ptr_eq(&atom1, &res1.borrow().atoms[0]));
 
         let atom2_name = "AT2";
-        let (res1_again, atom2) = get_or_insert_atom_and_residue(
-            res1_name, atom2_name, &mut residues).unwrap();
+        let (res1_again, atom2) =
+            get_or_insert_atom_and_residue(res1_name, atom2_name, &mut residues).unwrap();
 
         assert!(Rc::ptr_eq(&res1, &res1_again));
         assert_eq!(&*atom2.borrow(), &atom2_name);
@@ -292,16 +302,16 @@ mod tests {
         let res2_name = "RES2";
         let atom3_name = "AT3";
 
-        let (res2, atom3) = get_or_insert_atom_and_residue(
-            res2_name, atom3_name, &mut residues).unwrap();
+        let (res2, atom3) =
+            get_or_insert_atom_and_residue(res2_name, atom3_name, &mut residues).unwrap();
 
         assert!(!Rc::ptr_eq(&res1, &res2));
         assert_eq!(*res2.borrow().name.borrow(), res2_name);
         assert_eq!(&*atom3.borrow(), &atom3_name);
 
         // An atom with a name of another residue can be added, they will not be the same
-        let (res2_again, atom1_not_res1) = get_or_insert_atom_and_residue(
-            res2_name, atom1_name, &mut residues).unwrap();
+        let (res2_again, atom1_not_res1) =
+            get_or_insert_atom_and_residue(res2_name, atom1_name, &mut residues).unwrap();
 
         assert!(Rc::ptr_eq(&res2, &res2_again));
         assert!(!Rc::ptr_eq(&atom1, &atom1_not_res1));
@@ -319,8 +329,16 @@ mod tests {
     fn residue_iter_on_empty_conf_returns_none() {
         let conf = Conf {
             title: "A title".to_string(),
-            origin: RVec { x: 0.0, y: 0.0, z: 0.0 },
-            size: RVec { x: 0.0, y: 0.0, z: 0.0 },
+            origin: RVec {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            size: RVec {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
             residues: Vec::new(),
             atoms: Vec::new(),
         };
@@ -345,25 +363,49 @@ mod tests {
 
         let conf = Conf {
             title: "A title".to_string(),
-            origin: RVec { x: 0.0, y: 0.0, z: 0.0 },
-            size: RVec { x: 0.0, y: 0.0, z: 0.0 },
+            origin: RVec {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            size: RVec {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
             residues: residues.clone(),
             atoms: vec![
                 // Residue 2
                 Atom {
                     name: Rc::clone(&residues[1].borrow().atoms[0]),
                     residue: Rc::clone(&residues[1]),
-                    position: RVec { x: 0.0, y: 1.0, z: 2.0 },
-                    velocity: Some(RVec { x: 0.0, y: 0.1, z: 0.2 }),
+                    position: RVec {
+                        x: 0.0,
+                        y: 1.0,
+                        z: 2.0,
+                    },
+                    velocity: Some(RVec {
+                        x: 0.0,
+                        y: 0.1,
+                        z: 0.2,
+                    }),
                 },
                 // Residue 1
                 Atom {
                     name: Rc::clone(&residues[0].borrow().atoms[0]),
                     residue: Rc::clone(&residues[0]),
-                    position: RVec { x: 3.0, y: 4.0, z: 5.0 },
-                    velocity: Some(RVec { x: 0.3, y: 0.4, z: 0.5 }),
+                    position: RVec {
+                        x: 3.0,
+                        y: 4.0,
+                        z: 5.0,
+                    },
+                    velocity: Some(RVec {
+                        x: 0.3,
+                        y: 0.4,
+                        z: 0.5,
+                    }),
                 },
-            ]
+            ],
         };
 
         let mut iter = conf.iter_residues();
@@ -372,15 +414,43 @@ mod tests {
         assert_eq!(res.len(), 1);
         assert!(Rc::ptr_eq(&res[0].residue, &residues[1]));
         assert!(Rc::ptr_eq(&res[0].name, &residues[1].borrow().atoms[0]));
-        assert_eq!(res[0].position, RVec { x: 0.0, y: 1.0, z: 2.0 });
-        assert_eq!(res[0].velocity.unwrap(), RVec { x: 0.0, y: 0.1, z: 0.2 });
+        assert_eq!(
+            res[0].position,
+            RVec {
+                x: 0.0,
+                y: 1.0,
+                z: 2.0,
+            }
+        );
+        assert_eq!(
+            res[0].velocity.unwrap(),
+            RVec {
+                x: 0.0,
+                y: 0.1,
+                z: 0.2,
+            }
+        );
 
         let res = iter.next().unwrap().unwrap();
         assert_eq!(res.len(), 1);
         assert!(Rc::ptr_eq(&res[0].residue, &residues[0]));
         assert!(Rc::ptr_eq(&res[0].name, &residues[0].borrow().atoms[0]));
-        assert_eq!(res[0].position, RVec { x: 3.0, y: 4.0, z: 5.0 });
-        assert_eq!(res[0].velocity.unwrap(), RVec { x: 0.3, y: 0.4, z: 0.5 });
+        assert_eq!(
+            res[0].position,
+            RVec {
+                x: 3.0,
+                y: 4.0,
+                z: 5.0,
+            }
+        );
+        assert_eq!(
+            res[0].velocity.unwrap(),
+            RVec {
+                x: 0.3,
+                y: 0.4,
+                z: 0.5,
+            }
+        );
 
         assert!(iter.next().is_none());
     }
@@ -392,30 +462,46 @@ mod tests {
                 name: Rc::new(RefCell::new("RES1".to_string())),
                 atoms: vec![
                     Rc::new(RefCell::new("AT1".to_string())),
-                    Rc::new(RefCell::new("AT2".to_string()))
+                    Rc::new(RefCell::new("AT2".to_string())),
                 ],
             })),
         ];
 
         let conf = Conf {
             title: "A title".to_string(),
-            origin: RVec { x: 0.0, y: 0.0, z: 0.0 },
-            size: RVec { x: 0.0, y: 0.0, z: 0.0 },
+            origin: RVec {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            size: RVec {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
             residues: residues.clone(),
             atoms: vec![
                 Atom {
                     name: Rc::clone(&residues[0].borrow().atoms[0]),
                     residue: Rc::clone(&residues[0]),
-                    position: RVec { x: 0.0, y: 1.0, z: 2.0 },
+                    position: RVec {
+                        x: 0.0,
+                        y: 1.0,
+                        z: 2.0,
+                    },
                     velocity: None,
                 },
                 Atom {
                     name: Rc::clone(&residues[0].borrow().atoms[1]),
                     residue: Rc::clone(&residues[0]),
-                    position: RVec { x: 3.0, y: 4.0, z: 5.0 },
+                    position: RVec {
+                        x: 3.0,
+                        y: 4.0,
+                        z: 5.0,
+                    },
                     velocity: None,
                 },
-            ]
+            ],
         };
 
         let mut iter = conf.iter_residues();
@@ -425,11 +511,25 @@ mod tests {
 
         assert!(Rc::ptr_eq(&res[0].residue, &residues[0]));
         assert!(Rc::ptr_eq(&res[0].name, &residues[0].borrow().atoms[0]));
-        assert_eq!(res[0].position, RVec { x: 0.0, y: 1.0, z: 2.0 });
+        assert_eq!(
+            res[0].position,
+            RVec {
+                x: 0.0,
+                y: 1.0,
+                z: 2.0,
+            }
+        );
 
         assert!(Rc::ptr_eq(&res[1].residue, &residues[0]));
         assert!(Rc::ptr_eq(&res[1].name, &residues[0].borrow().atoms[1]));
-        assert_eq!(res[1].position, RVec { x: 3.0, y: 4.0, z: 5.0 });
+        assert_eq!(
+            res[1].position,
+            RVec {
+                x: 3.0,
+                y: 4.0,
+                z: 5.0,
+            }
+        );
 
         assert!(iter.next().is_none());
     }
@@ -441,51 +541,79 @@ mod tests {
                 name: Rc::new(RefCell::new("RES1".to_string())),
                 atoms: vec![
                     Rc::new(RefCell::new("AT1".to_string())),
-                    Rc::new(RefCell::new("AT2".to_string()))
+                    Rc::new(RefCell::new("AT2".to_string())),
                 ],
             })),
         ];
 
         let conf = Conf {
             title: "A title".to_string(),
-            origin: RVec { x: 0.0, y: 0.0, z: 0.0 },
-            size: RVec { x: 0.0, y: 0.0, z: 0.0 },
+            origin: RVec {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            size: RVec {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
             residues: residues.clone(),
             atoms: vec![
                 // Complete residue
                 Atom {
                     name: Rc::clone(&residues[0].borrow().atoms[0]),
                     residue: Rc::clone(&residues[0]),
-                    position: RVec { x: 0.0, y: 1.0, z: 2.0 },
+                    position: RVec {
+                        x: 0.0,
+                        y: 1.0,
+                        z: 2.0,
+                    },
                     velocity: None,
                 },
                 Atom {
                     name: Rc::clone(&residues[0].borrow().atoms[1]),
                     residue: Rc::clone(&residues[0]),
-                    position: RVec { x: 3.0, y: 4.0, z: 5.0 },
+                    position: RVec {
+                        x: 3.0,
+                        y: 4.0,
+                        z: 5.0,
+                    },
                     velocity: None,
                 },
                 // Incomplete residue: misses second atom
                 Atom {
                     name: Rc::clone(&residues[0].borrow().atoms[0]),
                     residue: Rc::clone(&residues[0]),
-                    position: RVec { x: 0.0, y: 1.0, z: 2.0 },
+                    position: RVec {
+                        x: 0.0,
+                        y: 1.0,
+                        z: 2.0,
+                    },
                     velocity: None,
                 },
                 // A final complete residue
                 Atom {
                     name: Rc::clone(&residues[0].borrow().atoms[0]),
                     residue: Rc::clone(&residues[0]),
-                    position: RVec { x: 6.0, y: 7.0, z: 8.0 },
+                    position: RVec {
+                        x: 6.0,
+                        y: 7.0,
+                        z: 8.0,
+                    },
                     velocity: None,
                 },
                 Atom {
                     name: Rc::clone(&residues[0].borrow().atoms[1]),
                     residue: Rc::clone(&residues[0]),
-                    position: RVec { x: 9.0, y: 10.0, z: 11.0 },
+                    position: RVec {
+                        x: 9.0,
+                        y: 10.0,
+                        z: 11.0,
+                    },
                     velocity: None,
                 },
-            ]
+            ],
         };
 
         let mut iter = conf.iter_residues();
@@ -501,11 +629,25 @@ mod tests {
 
         assert!(Rc::ptr_eq(&res[0].residue, &residues[0]));
         assert!(Rc::ptr_eq(&res[0].name, &residues[0].borrow().atoms[0]));
-        assert_eq!(res[0].position, RVec { x: 6.0, y: 7.0, z: 8.0 });
+        assert_eq!(
+            res[0].position,
+            RVec {
+                x: 6.0,
+                y: 7.0,
+                z: 8.0,
+            }
+        );
 
         assert!(Rc::ptr_eq(&res[1].residue, &residues[0]));
         assert!(Rc::ptr_eq(&res[1].name, &residues[0].borrow().atoms[1]));
-        assert_eq!(res[1].position, RVec { x: 9.0, y: 10.0, z: 11.0 });
+        assert_eq!(
+            res[1].position,
+            RVec {
+                x: 9.0,
+                y: 10.0,
+                z: 11.0,
+            }
+        );
 
         assert!(iter.next().is_none());
     }
@@ -517,22 +659,34 @@ mod tests {
                 name: Rc::new(RefCell::new("RES1".to_string())),
                 atoms: vec![
                     Rc::new(RefCell::new("AT1".to_string())),
-                    Rc::new(RefCell::new("AT2".to_string()))
+                    Rc::new(RefCell::new("AT2".to_string())),
                 ],
             })),
         ];
 
         let conf = Conf {
             title: "A title".to_string(),
-            origin: RVec { x: 0.0, y: 0.0, z: 0.0 },
-            size: RVec { x: 0.0, y: 0.0, z: 0.0 },
+            origin: RVec {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            size: RVec {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
             residues: residues.clone(),
             atoms: vec![
                 // Residue begins with wrong atom, and skipped
                 Atom {
                     name: Rc::clone(&residues[0].borrow().atoms[1]),
                     residue: Rc::clone(&residues[0]),
-                    position: RVec { x: 0.0, y: 1.0, z: 2.0 },
+                    position: RVec {
+                        x: 0.0,
+                        y: 1.0,
+                        z: 2.0,
+                    },
                     velocity: None,
                 },
                 // This residue (which along with the previous atom is a good residue)
@@ -540,23 +694,35 @@ mod tests {
                 Atom {
                     name: Rc::clone(&residues[0].borrow().atoms[0]),
                     residue: Rc::clone(&residues[0]),
-                    position: RVec { x: 0.0, y: 1.0, z: 2.0 },
+                    position: RVec {
+                        x: 0.0,
+                        y: 1.0,
+                        z: 2.0,
+                    },
                     velocity: None,
                 },
                 // The next residue is good
                 Atom {
                     name: Rc::clone(&residues[0].borrow().atoms[0]),
                     residue: Rc::clone(&residues[0]),
-                    position: RVec { x: 6.0, y: 7.0, z: 8.0 },
+                    position: RVec {
+                        x: 6.0,
+                        y: 7.0,
+                        z: 8.0,
+                    },
                     velocity: None,
                 },
                 Atom {
                     name: Rc::clone(&residues[0].borrow().atoms[1]),
                     residue: Rc::clone(&residues[0]),
-                    position: RVec { x: 9.0, y: 10.0, z: 11.0 },
+                    position: RVec {
+                        x: 9.0,
+                        y: 10.0,
+                        z: 11.0,
+                    },
                     velocity: None,
                 },
-            ]
+            ],
         };
 
         let mut iter = conf.iter_residues();
@@ -571,11 +737,25 @@ mod tests {
 
         assert!(Rc::ptr_eq(&res[0].residue, &residues[0]));
         assert!(Rc::ptr_eq(&res[0].name, &residues[0].borrow().atoms[0]));
-        assert_eq!(res[0].position, RVec { x: 6.0, y: 7.0, z: 8.0 });
+        assert_eq!(
+            res[0].position,
+            RVec {
+                x: 6.0,
+                y: 7.0,
+                z: 8.0,
+            }
+        );
 
         assert!(Rc::ptr_eq(&res[1].residue, &residues[0]));
         assert!(Rc::ptr_eq(&res[1].name, &residues[0].borrow().atoms[1]));
-        assert_eq!(res[1].position, RVec { x: 9.0, y: 10.0, z: 11.0 });
+        assert_eq!(
+            res[1].position,
+            RVec {
+                x: 9.0,
+                y: 10.0,
+                z: 11.0,
+            }
+        );
 
         assert!(iter.next().is_none());
     }
@@ -592,9 +772,7 @@ mod tests {
             })),
             Rc::new(RefCell::new(Residue {
                 name: Rc::new(RefCell::new("RES2".to_string())),
-                atoms: vec![
-                    Rc::new(RefCell::new("AT3".to_string())),
-                ],
+                atoms: vec![Rc::new(RefCell::new("AT3".to_string()))],
             })),
         ];
 
@@ -604,57 +782,97 @@ mod tests {
             Atom {
                 name: residues[0].borrow().atoms[0].clone(),
                 residue: residues[0].clone(),
-                position: RVec { x: 0.0, y: 1.0, z: 2.0 },
+                position: RVec {
+                    x: 0.0,
+                    y: 1.0,
+                    z: 2.0,
+                },
                 velocity: None,
             },
             Atom {
                 name: residues[0].borrow().atoms[1].clone(),
                 residue: residues[0].clone(),
-                position: RVec { x: 3.0, y: 4.0, z: 5.0 },
+                position: RVec {
+                    x: 3.0,
+                    y: 4.0,
+                    z: 5.0,
+                },
                 velocity: None,
             },
             Atom {
                 name: residues[0].borrow().atoms[0].clone(),
                 residue: residues[0].clone(),
-                position: RVec { x: 6.0, y: 7.0, z: 8.0 },
+                position: RVec {
+                    x: 6.0,
+                    y: 7.0,
+                    z: 8.0,
+                },
                 velocity: None,
             },
             Atom {
                 name: residues[0].borrow().atoms[1].clone(),
                 residue: residues[0].clone(),
-                position: RVec { x: 9.0, y: 10.0, z: 11.0 },
+                position: RVec {
+                    x: 9.0,
+                    y: 10.0,
+                    z: 11.0,
+                },
                 velocity: None,
             },
             Atom {
                 name: residues[1].borrow().atoms[0].clone(),
                 residue: residues[1].clone(),
-                position: RVec { x: 12.0, y: 13.0, z: 14.0 },
+                position: RVec {
+                    x: 12.0,
+                    y: 13.0,
+                    z: 14.0,
+                },
                 velocity: None,
             },
             Atom {
                 name: residues[1].borrow().atoms[0].clone(),
                 residue: residues[1].clone(),
-                position: RVec { x: 15.0, y: 16.0, z: 17.0 },
+                position: RVec {
+                    x: 15.0,
+                    y: 16.0,
+                    z: 17.0,
+                },
                 velocity: None,
             },
             Atom {
                 name: residues[0].borrow().atoms[0].clone(),
                 residue: residues[0].clone(),
-                position: RVec { x: 18.0, y: 19.0, z: 20.0 },
+                position: RVec {
+                    x: 18.0,
+                    y: 19.0,
+                    z: 20.0,
+                },
                 velocity: None,
             },
             Atom {
                 name: residues[0].borrow().atoms[1].clone(),
                 residue: residues[0].clone(),
-                position: RVec { x: 21.0, y: 22.0, z: 23.0 },
+                position: RVec {
+                    x: 21.0,
+                    y: 22.0,
+                    z: 23.0,
+                },
                 velocity: None,
             },
         ];
 
         let conf = Conf {
             title: "System".to_string(),
-            origin: RVec { x: 0.0, y: 0.0, z: 0.0 },
-            size: RVec { x: 1.0, y: 2.0, z: 3.0 },
+            origin: RVec {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            size: RVec {
+                x: 1.0,
+                y: 2.0,
+                z: 3.0,
+            },
             residues: residues.clone(),
             atoms,
         };
@@ -670,7 +888,14 @@ mod tests {
         assert_eq!(res4.len(), 1);
         assert!(Rc::ptr_eq(&res4[0].residue, &residues[1]));
         assert!(Rc::ptr_eq(&res4[0].name, &residues[1].borrow().atoms[0]));
-        assert_eq!(res4[0].position, RVec { x: 15.0, y: 16.0, z: 17.0 });
+        assert_eq!(
+            res4[0].position,
+            RVec {
+                x: 15.0,
+                y: 16.0,
+                z: 17.0,
+            }
+        );
         assert_eq!(res4[0].velocity, None);
 
         let res5 = iter.next().unwrap().unwrap();
@@ -678,12 +903,26 @@ mod tests {
 
         assert!(Rc::ptr_eq(&res5[0].residue, &residues[0]));
         assert!(Rc::ptr_eq(&res5[0].name, &residues[0].borrow().atoms[0]));
-        assert_eq!(res5[0].position, RVec { x: 18.0, y: 19.0, z: 20.0 });
+        assert_eq!(
+            res5[0].position,
+            RVec {
+                x: 18.0,
+                y: 19.0,
+                z: 20.0,
+            }
+        );
         assert_eq!(res5[0].velocity, None);
 
         assert!(Rc::ptr_eq(&res5[1].residue, &residues[0]));
         assert!(Rc::ptr_eq(&res5[1].name, &residues[0].borrow().atoms[1]));
-        assert_eq!(res5[1].position, RVec { x: 21.0, y: 22.0, z: 23.0 });
+        assert_eq!(
+            res5[1].position,
+            RVec {
+                x: 21.0,
+                y: 22.0,
+                z: 23.0,
+            }
+        );
         assert_eq!(res5[1].velocity, None);
 
         assert!(iter.next().is_none());
@@ -691,7 +930,11 @@ mod tests {
 
     #[test]
     fn multiply_conf_to_extend_it() {
-        let size = RVec { x: 10.0, y: 20.0, z: 30.0 };
+        let size = RVec {
+            x: 10.0,
+            y: 20.0,
+            z: 30.0,
+        };
 
         let residues = vec![
             Rc::new(RefCell::new(Residue {
@@ -706,39 +949,66 @@ mod tests {
 
         let conf = Conf {
             title: "A title".to_string(),
-            origin: RVec { x: 0.0, y: 0.0, z: 0.0 },
+            origin: RVec {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
             size,
             residues: residues.clone(),
             atoms: vec![
                 Atom {
                     name: Rc::clone(&residues[1].borrow().atoms[0]),
                     residue: Rc::clone(&residues[1]),
-                    position: RVec { x: 0.0, y: 1.0, z: 2.0 },
-                    velocity: Some(RVec { x: 0.0, y: 0.1, z: 0.2 }),
+                    position: RVec {
+                        x: 0.0,
+                        y: 1.0,
+                        z: 2.0,
+                    },
+                    velocity: Some(RVec {
+                        x: 0.0,
+                        y: 0.1,
+                        z: 0.2,
+                    }),
                 },
                 Atom {
                     name: Rc::clone(&residues[0].borrow().atoms[0]),
                     residue: Rc::clone(&residues[0]),
-                    position: RVec { x: 3.0, y: 4.0, z: 5.0 },
-                    velocity: Some(RVec { x: 0.3, y: 0.4, z: 0.5 }),
+                    position: RVec {
+                        x: 3.0,
+                        y: 4.0,
+                        z: 5.0,
+                    },
+                    velocity: Some(RVec {
+                        x: 0.3,
+                        y: 0.4,
+                        z: 0.5,
+                    }),
                 },
-            ]
+            ],
         };
 
         let (nx, ny, nz) = (2, 3, 4);
         let multiplied_conf = conf.pbc_multiply(nx, ny, nz);
 
-        assert_eq!(multiplied_conf.size,
-            RVec { x: 10.0 * (nx as f64), y: 20.0 * (ny as f64), z: 30.0 * (nz as f64) }
+        assert_eq!(
+            multiplied_conf.size,
+            RVec {
+                x: 10.0 * (nx as f64),
+                y: 20.0 * (ny as f64),
+                z: 30.0 * (nz as f64),
+            }
         );
         assert_eq!(multiplied_conf.atoms.len(), conf.atoms.len() * nx * ny * nz);
 
         // The final atom should be from the maximum (nx, ny, nz) image
         assert!(Rc::ptr_eq(
-            &multiplied_conf.atoms.last().unwrap().name, &conf.atoms.last().unwrap().name
+            &multiplied_conf.atoms.last().unwrap().name,
+            &conf.atoms.last().unwrap().name
         ));
         assert!(Rc::ptr_eq(
-            &multiplied_conf.atoms.last().unwrap().residue, &conf.atoms.last().unwrap().residue
+            &multiplied_conf.atoms.last().unwrap().residue,
+            &conf.atoms.last().unwrap().residue
         ));
         assert_eq!(
             multiplied_conf.atoms.last().unwrap().position,
@@ -763,9 +1033,7 @@ mod tests {
             })),
             Rc::new(RefCell::new(Residue {
                 name: Rc::new(RefCell::new("RES2".to_string())),
-                atoms: vec![
-                    Rc::new(RefCell::new("AT3".to_string())),
-                ],
+                atoms: vec![Rc::new(RefCell::new("AT3".to_string()))],
             })),
         ];
 
@@ -775,64 +1043,95 @@ mod tests {
             Atom {
                 name: residues[1].borrow().atoms[0].clone(),
                 residue: residues[1].clone(),
-                position: RVec { x: 12.0, y: 13.0, z: 14.0 },
+                position: RVec {
+                    x: 12.0,
+                    y: 13.0,
+                    z: 14.0,
+                },
                 velocity: None,
             },
             Atom {
                 name: residues[1].borrow().atoms[0].clone(),
                 residue: residues[1].clone(),
-                position: RVec { x: 15.0, y: 16.0, z: 17.0 },
+                position: RVec {
+                    x: 15.0,
+                    y: 16.0,
+                    z: 17.0,
+                },
                 velocity: None,
             },
             // Two residues of the type we want to keep (2 atoms per residue)
             Atom {
                 name: residues[0].borrow().atoms[0].clone(),
                 residue: residues[0].clone(),
-                position: RVec { x: 0.0, y: 1.0, z: 2.0 },
+                position: RVec {
+                    x: 0.0,
+                    y: 1.0,
+                    z: 2.0,
+                },
                 velocity: None,
             },
             Atom {
                 name: residues[0].borrow().atoms[1].clone(),
                 residue: residues[0].clone(),
-                position: RVec { x: 3.0, y: 4.0, z: 5.0 },
+                position: RVec {
+                    x: 3.0,
+                    y: 4.0,
+                    z: 5.0,
+                },
                 velocity: None,
             },
             Atom {
                 name: residues[0].borrow().atoms[0].clone(),
                 residue: residues[0].clone(),
-                position: RVec { x: 6.0, y: 7.0, z: 8.0 },
+                position: RVec {
+                    x: 6.0,
+                    y: 7.0,
+                    z: 8.0,
+                },
                 velocity: None,
             },
             Atom {
                 name: residues[0].borrow().atoms[1].clone(),
                 residue: residues[0].clone(),
-                position: RVec { x: 9.0, y: 10.0, z: 11.0 },
+                position: RVec {
+                    x: 9.0,
+                    y: 10.0,
+                    z: 11.0,
+                },
                 velocity: None,
             },
         ];
 
         let mut conf = Conf {
             title: "System".to_string(),
-            origin: RVec { x: 0.0, y: 0.0, z: 0.0 },
-            size: RVec { x: 1.0, y: 2.0, z: 3.0 },
+            origin: RVec {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            size: RVec {
+                x: 1.0,
+                y: 2.0,
+                z: 3.0,
+            },
             residues: residues.clone(),
             atoms: atoms.clone(),
         };
 
-        let residues = conf
-                .iter_residues()
-                .filter_map(|atoms| atoms.ok())
-                .filter(|atoms| {
-                    let atom = atoms[0].clone();
-                    let residue = atom.residue.clone();
+        let residues = conf.iter_residues()
+            .filter_map(|atoms| atoms.ok())
+            .filter(|atoms| {
+                let atom = atoms[0].clone();
+                let residue = atom.residue.clone();
 
-                    if &*residue.borrow().name.borrow() == "RES1" {
-                        true
-                    } else {
-                        false
-                    }
-                })
-                .collect::<Vec<_>>();
+                if &*residue.borrow().name.borrow() == "RES1" {
+                    true
+                } else {
+                    false
+                }
+            })
+            .collect::<Vec<_>>();
 
         conf.assign_residues(residues.as_slice());
         assert_eq!(conf.atoms.len(), 4);

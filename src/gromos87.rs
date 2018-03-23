@@ -1,5 +1,5 @@
-use conf::{Atom, Conf, get_or_insert_atom_and_residue};
-use rvec::{RVec, ParseRVecError};
+use conf::{get_or_insert_atom_and_residue, Atom, Conf};
+use rvec::{ParseRVecError, RVec};
 
 use std::io;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -13,26 +13,42 @@ pub fn write_gromos87_conf<W: Write>(conf: &Conf, mut writer: &mut W) -> Result<
         // GROMOS-87 wraps indices at 5 digits, ie. at 100_000
         let res_num_wrapped = (res_num + 1) % 100_000;
 
-        for atom in residue.map_err(|_| WriteError::BadResidue(res_num + 1))?.iter() {
+        for atom in residue
+            .map_err(|_| WriteError::BadResidue(res_num + 1))?
+            .iter()
+        {
             atom_num += 1;
             let atom_num_wrapped = atom_num % 100_000;
 
-            write!(&mut writer, "{:>5}{:<5}{:>5}{:>5}{:>8.3}{:>8.3}{:>8.3}",
-                res_num_wrapped, atom.residue.borrow().name.borrow(),
-                *atom.name.borrow(), atom_num_wrapped,
-                atom.position.x, atom.position.y, atom.position.z)?;
+            write!(
+                &mut writer,
+                "{:>5}{:<5}{:>5}{:>5}{:>8.3}{:>8.3}{:>8.3}",
+                res_num_wrapped,
+                atom.residue.borrow().name.borrow(),
+                *atom.name.borrow(),
+                atom_num_wrapped,
+                atom.position.x,
+                atom.position.y,
+                atom.position.z
+            )?;
 
             if let Some(velocity) = atom.velocity {
-                write!(&mut writer, "{:>8.3}{:>8.3}{:>8.3}",
-                    velocity.x, velocity.y, velocity.z)?;
+                write!(
+                    &mut writer,
+                    "{:>8.3}{:>8.3}{:>8.3}",
+                    velocity.x, velocity.y, velocity.z
+                )?;
             }
 
             write!(&mut writer, "\n")?;
         }
     }
 
-    write!(&mut writer, " {:12.5} {:12.5} {:12.5}\n",
-        conf.size.x, conf.size.y, conf.size.z)?;
+    write!(
+        &mut writer,
+        " {:12.5} {:12.5} {:12.5}\n",
+        conf.size.x, conf.size.y, conf.size.z
+    )?;
 
     Ok(())
 }
@@ -84,24 +100,34 @@ pub fn read_gromos87_conf<R: Read>(reader: R) -> Result<Conf, ReadError> {
     let mut buf_reader = BufReader::new(reader);
     let mut buf = String::new();
 
-    buf_reader.read_line(&mut buf).map_err(|_| ReadError::Utf8Error(1))?;
+    buf_reader
+        .read_line(&mut buf)
+        .map_err(|_| ReadError::Utf8Error(1))?;
     let title = buf.trim().to_string();
     buf.clear();
 
-    buf_reader.read_line(&mut buf).map_err(|_| ReadError::Utf8Error(1))?;
-    let num_atoms = buf.trim().parse::<usize>().map_err(|_| ReadError::NumAtomsError)?;
+    buf_reader
+        .read_line(&mut buf)
+        .map_err(|_| ReadError::Utf8Error(1))?;
+    let num_atoms = buf.trim()
+        .parse::<usize>()
+        .map_err(|_| ReadError::NumAtomsError)?;
     buf.clear();
 
     let mut residues = Vec::new();
     let mut atoms = Vec::new();
 
     for i in 0..num_atoms {
-        buf_reader.read_line(&mut buf).map_err(|_| ReadError::Utf8Error(2 + i))?;
+        buf_reader
+            .read_line(&mut buf)
+            .map_err(|_| ReadError::Utf8Error(2 + i))?;
 
         let atom_line = parse_atom_line(&buf).map_err(|_| ReadError::LineError(2 + i))?;
         let (residue, atom) = get_or_insert_atom_and_residue(
-                atom_line.residue_name, atom_line.atom_name, &mut residues
-            ).map_err(|_| ReadError::LineError(2 + i))?;;
+            atom_line.residue_name,
+            atom_line.atom_name,
+            &mut residues,
+        ).map_err(|_| ReadError::LineError(2 + i))?;
 
         atoms.push(Atom {
             name: atom,
@@ -113,12 +139,18 @@ pub fn read_gromos87_conf<R: Read>(reader: R) -> Result<Conf, ReadError> {
         buf.clear();
     }
 
-    buf_reader.read_line(&mut buf).map_err(|_| ReadError::Utf8Error(3 + num_atoms))?;
+    buf_reader
+        .read_line(&mut buf)
+        .map_err(|_| ReadError::Utf8Error(3 + num_atoms))?;
     let size = RVec::from_whitespace(&buf).expect("could not read box size");
 
     Ok(Conf {
         title,
-        origin: RVec { x: 0.0, y: 0.0, z: 0.0 },
+        origin: RVec {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        },
         size,
         residues,
         atoms,
@@ -191,7 +223,14 @@ mod tests {
         // assert_eq!(line.atom_number, 1);
         assert_eq!(line.residue_name, "RES");
         assert_eq!(line.atom_name, "ATOM");
-        assert_eq!(line.position, RVec { x: 1000.001, y: 2000.002, z: 3000.003 });
+        assert_eq!(
+            line.position,
+            RVec {
+                x: 1000.001,
+                y: 2000.002,
+                z: 3000.003,
+            }
+        );
         assert_eq!(line.velocity, None);
 
         let s = "    12RES12ATO150001 100.01  200.02  300.03  400.04  500.05  600.06 ";
@@ -200,8 +239,22 @@ mod tests {
         // assert_eq!(line.atom_number, 50001);
         assert_eq!(line.residue_name, "2RES1");
         assert_eq!(line.atom_name, "2ATO1");
-        assert_eq!(line.position, RVec { x: 100.01, y: 200.02, z: 300.03 });
-        assert_eq!(line.velocity, Some(RVec { x: 400.04, y: 500.05, z: 600.06 }));
+        assert_eq!(
+            line.position,
+            RVec {
+                x: 100.01,
+                y: 200.02,
+                z: 300.03,
+            }
+        );
+        assert_eq!(
+            line.velocity,
+            Some(RVec {
+                x: 400.04,
+                y: 500.05,
+                z: 600.06,
+            })
+        );
     }
 
     #[test]
@@ -212,20 +265,57 @@ mod tests {
         let res2_name = "RES2";
 
         let atom1_name = "AT1";
-        let atom1_pos = RVec { x: 0.0, y: 1.0, z: 2.0 };
-        let atom1_vel = RVec { x: 0.0, y: 0.1, z: 0.3 };
+        let atom1_pos = RVec {
+            x: 0.0,
+            y: 1.0,
+            z: 2.0,
+        };
+        let atom1_vel = RVec {
+            x: 0.0,
+            y: 0.1,
+            z: 0.3,
+        };
         let atom2_name = "AT2";
-        let atom2_pos = RVec { x: 3.0, y: 4.0, z: 5.0 };
-        let atom2_vel = RVec { x: 0.3, y: 0.4, z: 0.5 };
+        let atom2_pos = RVec {
+            x: 3.0,
+            y: 4.0,
+            z: 5.0,
+        };
+        let atom2_vel = RVec {
+            x: 0.3,
+            y: 0.4,
+            z: 0.5,
+        };
         let atom3_name = "AT3";
-        let atom3_pos1 = RVec { x: 6.0, y: 7.0, z: 8.0 };
-        let atom3_vel1 = RVec { x: 0.6, y: 0.7, z: 0.8 };
-        let atom3_pos2 = RVec { x: 9.0, y: 10.0, z: 11.0 };
-        let atom3_vel2 = RVec { x: 0.9, y: 1.0, z: 1.1 };
+        let atom3_pos1 = RVec {
+            x: 6.0,
+            y: 7.0,
+            z: 8.0,
+        };
+        let atom3_vel1 = RVec {
+            x: 0.6,
+            y: 0.7,
+            z: 0.8,
+        };
+        let atom3_pos2 = RVec {
+            x: 9.0,
+            y: 10.0,
+            z: 11.0,
+        };
+        let atom3_vel2 = RVec {
+            x: 0.9,
+            y: 1.0,
+            z: 1.1,
+        };
 
-        let size = RVec { x: 10.0, y: 11.0, z: 12.0 };
+        let size = RVec {
+            x: 10.0,
+            y: 11.0,
+            z: 12.0,
+        };
 
-        let content = format!("\
+        let content = format!(
+            "\
 {}
 4
 {:>5}{:<5}{:>5}{:>5}{:>8.3}{:>8.3}{:>8.3}{:>8.3}{:>8.3}{:>8.3}
@@ -233,22 +323,65 @@ mod tests {
 {:>5}{:<5}{:>5}{:>5}{:>8.3}{:>8.3}{:>8.3}{:>8.3}{:>8.3}{:>8.3}
 {:>5}{:<5}{:>5}{:>5}{:>8.3}{:>8.3}{:>8.3}{:>8.3}{:>8.3}{:>8.3}
 {:12.3} {:12.3} {:12.3}
-", title,
-   1, res1_name, atom1_name, 1, atom1_pos.x, atom1_pos.y, atom1_pos.z,
-                                atom1_vel.x, atom1_vel.y, atom1_vel.z,
-   1, res1_name, atom2_name, 2, atom2_pos.x, atom2_pos.y, atom2_pos.z,
-                                atom2_vel.x, atom2_vel.y, atom2_vel.z,
-   2, res2_name, atom3_name, 3, atom3_pos1.x, atom3_pos1.y, atom3_pos1.z,
-                                atom3_vel1.x, atom3_vel1.y, atom3_vel1.z,
-   3, res2_name, atom3_name, 4, atom3_pos2.x, atom3_pos2.y, atom3_pos2.z,
-                                atom3_vel2.x, atom3_vel2.y, atom3_vel2.z,
-   size.x, size.y, size.z);
+",
+            title,
+            1,
+            res1_name,
+            atom1_name,
+            1,
+            atom1_pos.x,
+            atom1_pos.y,
+            atom1_pos.z,
+            atom1_vel.x,
+            atom1_vel.y,
+            atom1_vel.z,
+            1,
+            res1_name,
+            atom2_name,
+            2,
+            atom2_pos.x,
+            atom2_pos.y,
+            atom2_pos.z,
+            atom2_vel.x,
+            atom2_vel.y,
+            atom2_vel.z,
+            2,
+            res2_name,
+            atom3_name,
+            3,
+            atom3_pos1.x,
+            atom3_pos1.y,
+            atom3_pos1.z,
+            atom3_vel1.x,
+            atom3_vel1.y,
+            atom3_vel1.z,
+            3,
+            res2_name,
+            atom3_name,
+            4,
+            atom3_pos2.x,
+            atom3_pos2.y,
+            atom3_pos2.z,
+            atom3_vel2.x,
+            atom3_vel2.y,
+            atom3_vel2.z,
+            size.x,
+            size.y,
+            size.z
+        );
 
         let conf = read_gromos87_conf(content.as_bytes()).unwrap();
 
         assert_eq!(conf.title, title);
         assert_eq!(conf.atoms.len(), 4);
-        assert_eq!(conf.origin, RVec { x: 0.0, y: 0.0, z: 0.0 });
+        assert_eq!(
+            conf.origin,
+            RVec {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            }
+        );
         assert_eq!(conf.size, size);
 
         // Verify that all residues were correctly constructed
@@ -264,9 +397,15 @@ mod tests {
         assert_eq!(&*conf.residues[1].borrow().atoms[0].borrow(), atom3_name);
 
         // Verify that pointers are correctly set from atoms to their residues
-        assert!(Rc::ptr_eq(&conf.atoms[0].name, &conf.residues[0].borrow().atoms[0]));
+        assert!(Rc::ptr_eq(
+            &conf.atoms[0].name,
+            &conf.residues[0].borrow().atoms[0]
+        ));
         assert!(Rc::ptr_eq(&conf.atoms[1].residue, &conf.residues[0]));
-        assert!(Rc::ptr_eq(&conf.atoms[2].name, &conf.residues[1].borrow().atoms[0]));
+        assert!(Rc::ptr_eq(
+            &conf.atoms[2].name,
+            &conf.residues[1].borrow().atoms[0]
+        ));
         assert!(Rc::ptr_eq(&conf.atoms[2].residue, &conf.residues[1]));
 
         // Verify one position and velocity
@@ -281,10 +420,16 @@ mod tests {
     1RES1   AT1    1   0.000   1.000   2.000   0.000   0.100   0.300
     1RES1   AT2    2   3.000   4.000   5.000   0.300   0.400   0.500";
 
-        let content = format!("{}\n{}\n{}\n{}", "More atom lines than atoms", 1, two_atom_lines, size_line);
+        let content = format!(
+            "{}\n{}\n{}\n{}",
+            "More atom lines than atoms", 1, two_atom_lines, size_line
+        );
         assert!(read_gromos87_conf(content.as_bytes()).is_err());
 
-        let content = format!("{}\n{}\n{}\n{}", "Fewer atom lines than atoms", 3, two_atom_lines, size_line);
+        let content = format!(
+            "{}\n{}\n{}\n{}",
+            "Fewer atom lines than atoms", 3, two_atom_lines, size_line
+        );
         assert!(read_gromos87_conf(content.as_bytes()).is_err());
 
         let content = format!("{}\n{}\n{}", "No box size line", 2, two_atom_lines);
@@ -293,10 +438,16 @@ mod tests {
         let content = format!("{}\n{}\n{}1.0 2.0", "Bad box size line", 2, two_atom_lines);
         assert!(read_gromos87_conf(content.as_bytes()).is_err());
 
-        let content = format!("{}\n{}\n{}1.s 2.0 3.0", "Bad box size line", 2, two_atom_lines);
+        let content = format!(
+            "{}\n{}\n{}1.s 2.0 3.0",
+            "Bad box size line", 2, two_atom_lines
+        );
         assert!(read_gromos87_conf(content.as_bytes()).is_err());
 
-        let content = format!("{}\n{}\n{}", "No number of atoms line", two_atom_lines, size_line);
+        let content = format!(
+            "{}\n{}\n{}",
+            "No number of atoms line", two_atom_lines, size_line
+        );
         assert!(read_gromos87_conf(content.as_bytes()).is_err());
     }
 
@@ -315,25 +466,49 @@ mod tests {
 
         let conf = Conf {
             title: "A title".to_string(),
-            origin: RVec { x: 1.0, y: 2.0, z: 3.0 },
-            size: RVec { x: 10.0, y: 20.0, z: 30.0 },
+            origin: RVec {
+                x: 1.0,
+                y: 2.0,
+                z: 3.0,
+            },
+            size: RVec {
+                x: 10.0,
+                y: 20.0,
+                z: 30.0,
+            },
             residues: residues.clone(),
             atoms: vec![
                 // Residue 2
                 Atom {
                     name: Rc::clone(&residues[1].borrow().atoms[0]),
                     residue: Rc::clone(&residues[1]),
-                    position: RVec { x: 0.0, y: 1.0, z: 2.0 },
-                    velocity: Some(RVec { x: 0.0, y: 0.1, z: 0.2 }),
+                    position: RVec {
+                        x: 0.0,
+                        y: 1.0,
+                        z: 2.0,
+                    },
+                    velocity: Some(RVec {
+                        x: 0.0,
+                        y: 0.1,
+                        z: 0.2,
+                    }),
                 },
                 // Residue 1
                 Atom {
                     name: Rc::clone(&residues[0].borrow().atoms[0]),
                     residue: Rc::clone(&residues[0]),
-                    position: RVec { x: 3.0, y: 4.0, z: 5.0 },
-                    velocity: Some(RVec { x: 0.3, y: 0.4, z: 0.5 }),
+                    position: RVec {
+                        x: 3.0,
+                        y: 4.0,
+                        z: 5.0,
+                    },
+                    velocity: Some(RVec {
+                        x: 0.3,
+                        y: 0.4,
+                        z: 0.5,
+                    }),
                 },
-            ]
+            ],
         };
 
         // Write the configuration to a buffer
@@ -345,7 +520,14 @@ mod tests {
         let read_conf = read_gromos87_conf(buf).unwrap();
 
         assert_eq!(read_conf.title, conf.title);
-        assert_eq!(read_conf.origin, RVec { x: 0.0, y: 0.0, z: 0.0 });
+        assert_eq!(
+            read_conf.origin,
+            RVec {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            }
+        );
         assert_eq!(read_conf.size, conf.size);
 
         assert_eq!(read_conf.residues.len(), 2);
@@ -353,7 +535,10 @@ mod tests {
 
         for (read_atom, atom) in read_conf.atoms.iter().zip(conf.atoms.iter()) {
             assert_eq!(*read_atom.name.borrow(), *atom.name.borrow());
-            assert_eq!(*read_atom.residue.borrow().name, *atom.residue.borrow().name);
+            assert_eq!(
+                *read_atom.residue.borrow().name,
+                *atom.residue.borrow().name
+            );
             assert_eq!(read_atom.position, atom.position);
             assert_eq!(read_atom.velocity.unwrap(), atom.velocity.unwrap());
         }
@@ -363,8 +548,16 @@ mod tests {
     fn box_size_is_written_in_a_fixed_format_with_leading_space_for_all_dimensions() {
         let conf = Conf {
             title: "A title".to_string(),
-            origin: RVec { x: 1.0, y: 2.0, z: 3.0 },
-            size: RVec { x: 10.0, y: 20.0, z: 30.0 },
+            origin: RVec {
+                x: 1.0,
+                y: 2.0,
+                z: 3.0,
+            },
+            size: RVec {
+                x: 10.0,
+                y: 20.0,
+                z: 30.0,
+            },
             residues: Vec::new(),
             atoms: Vec::new(),
         };
@@ -376,7 +569,10 @@ mod tests {
         let box_size_line = buf.lines().skip(2).next().unwrap().unwrap();
 
         assert_eq!(
-            format!(" {:12.5} {:12.5} {:12.5}", conf.size.x, conf.size.y, conf.size.z),
+            format!(
+                " {:12.5} {:12.5} {:12.5}",
+                conf.size.x, conf.size.y, conf.size.z
+            ),
             box_size_line
         );
     }
@@ -392,8 +588,16 @@ mod tests {
 
         let conf = Conf {
             title: "A title".to_string(),
-            origin: RVec { x: 1.0, y: 2.0, z: 3.0 },
-            size: RVec { x: 10.0, y: 20.0, z: 30.0 },
+            origin: RVec {
+                x: 1.0,
+                y: 2.0,
+                z: 3.0,
+            },
+            size: RVec {
+                x: 10.0,
+                y: 20.0,
+                z: 30.0,
+            },
             residues: residues.clone(),
 
             // Add 100_000 atoms, since indexing begins at 1 the last atom will wrap to 0!
@@ -401,10 +605,15 @@ mod tests {
                 Atom {
                     name: Rc::clone(&residues[0].borrow().atoms[0]),
                     residue: Rc::clone(&residues[0]),
-                    position: RVec { x: 0.0, y: 1.0, z: 2.0 },
+                    position: RVec {
+                        x: 0.0,
+                        y: 1.0,
+                        z: 2.0,
+                    },
                     velocity: None,
-                }; 100_000
-            ]
+                };
+                100_000
+            ],
         };
 
         // Write the configuration to a buffer
@@ -419,7 +628,7 @@ mod tests {
         let atom_num = &tail[15..20];
 
         assert_eq!(residue_num, "    0");
-        assert_eq!(atom_num,    "    0");
+        assert_eq!(atom_num, "    0");
 
         // Verify that the names are untouched
         let residue_name = &tail[5..10];
