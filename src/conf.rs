@@ -28,6 +28,12 @@ pub struct Conf {
 }
 
 impl Conf {
+    /// Assign a set of `ResidueIter` objects as the atoms of the configuration,
+    /// replacing any atoms present in it.
+    fn assign_residues(&mut self, residues: &[Vec<Atom>]) {
+        self.atoms = residues.iter().flat_map(|atoms| atoms.iter()).cloned().collect();
+    }
+
     /// Read a configuration from a `Gromos87` formatted file.
     pub fn from_gromos87(path: &Path) -> Result<Conf, ReadError> {
         let file = File::open(path)?;
@@ -742,5 +748,102 @@ mod tests {
             multiplied_conf.atoms.last().unwrap().velocity,
             conf.atoms.last().unwrap().velocity
         );
+    }
+
+    #[test]
+    fn assign_filtered_residues_to_configuration() {
+        // Two types of residues, we want to filter out the second.
+        let residues = vec![
+            Rc::new(RefCell::new(Residue {
+                name: Rc::new(RefCell::new("RES1".to_string())),
+                atoms: vec![
+                    Rc::new(RefCell::new("AT1".to_string())),
+                    Rc::new(RefCell::new("At2".to_string())),
+                ],
+            })),
+            Rc::new(RefCell::new(Residue {
+                name: Rc::new(RefCell::new("RES2".to_string())),
+                atoms: vec![
+                    Rc::new(RefCell::new("AT3".to_string())),
+                ],
+            })),
+        ];
+
+        // This configuration contains 2 different residues, which we will filter to only get one.
+        let atoms = vec![
+            // Filter the next two objects residues
+            Atom {
+                name: residues[1].borrow().atoms[0].clone(),
+                residue: residues[1].clone(),
+                position: RVec { x: 12.0, y: 13.0, z: 14.0 },
+                velocity: None,
+            },
+            Atom {
+                name: residues[1].borrow().atoms[0].clone(),
+                residue: residues[1].clone(),
+                position: RVec { x: 15.0, y: 16.0, z: 17.0 },
+                velocity: None,
+            },
+            // Two residues of the type we want to keep (2 atoms per residue)
+            Atom {
+                name: residues[0].borrow().atoms[0].clone(),
+                residue: residues[0].clone(),
+                position: RVec { x: 0.0, y: 1.0, z: 2.0 },
+                velocity: None,
+            },
+            Atom {
+                name: residues[0].borrow().atoms[1].clone(),
+                residue: residues[0].clone(),
+                position: RVec { x: 3.0, y: 4.0, z: 5.0 },
+                velocity: None,
+            },
+            Atom {
+                name: residues[0].borrow().atoms[0].clone(),
+                residue: residues[0].clone(),
+                position: RVec { x: 6.0, y: 7.0, z: 8.0 },
+                velocity: None,
+            },
+            Atom {
+                name: residues[0].borrow().atoms[1].clone(),
+                residue: residues[0].clone(),
+                position: RVec { x: 9.0, y: 10.0, z: 11.0 },
+                velocity: None,
+            },
+        ];
+
+        let mut conf = Conf {
+            title: "System".to_string(),
+            origin: RVec { x: 0.0, y: 0.0, z: 0.0 },
+            size: RVec { x: 1.0, y: 2.0, z: 3.0 },
+            residues: residues.clone(),
+            atoms: atoms.clone(),
+        };
+
+        let residues = conf
+                .iter_residues()
+                .filter_map(|atoms| atoms.ok())
+                .filter(|atoms| {
+                    let atom = atoms[0].clone();
+                    let residue = atom.residue.clone();
+
+                    if &*residue.borrow().name.borrow() == "RES1" {
+                        true
+                    } else {
+                        false
+                    }
+                })
+                .collect::<Vec<_>>();
+
+        conf.assign_residues(residues.as_slice());
+        assert_eq!(conf.atoms.len(), 4);
+
+        // Compare against the original list, with the first two should-be-filtered
+        // residues being skipped
+        for (atom1, atom2) in conf.atoms.iter().zip(atoms.iter().skip(2)) {
+            assert!(Rc::ptr_eq(&atom1.name, &atom2.name));
+            assert!(Rc::ptr_eq(&atom1.residue, &atom2.residue));
+            assert_eq!(atom1.position, atom2.position);
+            assert_eq!(atom1.velocity, atom2.velocity);
+        }
     }
 }
