@@ -30,7 +30,7 @@ pub struct Conf {
 impl Conf {
     /// Assign a set of `ResidueIter` objects as the atoms of the configuration,
     /// replacing any atoms present in it.
-    fn assign_residues(&mut self, residues: &[Vec<Atom>]) {
+    pub fn assign_residues(&mut self, residues: &[Vec<Atom>]) {
         self.atoms = residues
             .iter()
             .flat_map(|atoms| atoms.iter())
