@@ -105,10 +105,10 @@ impl<'a> ResidueIter<'a> {
 }
 
 impl<'a> Iterator for ResidueIter<'a> {
-    type Item = Result<Vec<&'a Atom>, ResidueError>;
+    type Item = Result<Vec<Atom>, ResidueError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let atom1 = self.atoms.get(self.index)?;
+        let atom1 = self.atoms.get(self.index)?.clone();
 
         let residue = atom1.residue.clone();
         let residue_len = residue.borrow().atoms.len();
@@ -128,7 +128,7 @@ impl<'a> Iterator for ResidueIter<'a> {
                         return Some(Err(self.get_iter_error(i)));
                     }
 
-                    atom_list.push(atom);
+                    atom_list.push(atom.clone());
                 },
                 None => {
                     return Some(Err(self.get_iter_error(i)));
