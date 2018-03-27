@@ -164,6 +164,11 @@ pub struct Residue {
 }
 
 impl Residue {
+    /// Compare the residue's name to an input.
+    pub fn cmp_name(&self, to_name: &str) -> bool {
+        &*self.name.borrow() == to_name
+    }
+
     fn get_or_insert_atom(&mut self, atom_name: &str) -> Rc<RefCell<String>> {
         self.atoms
             .iter()
@@ -193,12 +198,12 @@ pub struct Atom {
 }
 
 impl Atom {
-    /// Compare the atom's name to an input name.
-    pub fn cmp_atom_name(&self, to_name: &str) -> bool {
+    /// Compare the atom's name to an input.
+    pub fn cmp_name(&self, to_name: &str) -> bool {
         &*self.name.borrow() == to_name
     }
 
-    /// Compare the atom's parent residue name to an input name.
+    /// Compare the atom's parent residue name to an input.
     pub fn cmp_residue_name(&self, to_name: &str) -> bool {
         &*self.residue.borrow().name.borrow() == to_name
     }
@@ -1179,8 +1184,11 @@ mod tests {
             velocity: None,
         };
 
-        assert!(atom.cmp_atom_name("AT1"));
-        assert!(!atom.cmp_atom_name("AT2"));
+        assert!(residue.borrow().cmp_name("RES1"));
+        assert!(!residue.borrow().cmp_name("RES2"));
+
+        assert!(atom.cmp_name("AT1"));
+        assert!(!atom.cmp_name("AT2"));
 
         assert!(atom.cmp_residue_name("RES1"));
         assert!(!atom.cmp_residue_name("RES2"));
