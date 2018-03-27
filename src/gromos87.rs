@@ -35,7 +35,7 @@ pub fn write_gromos87_conf<W: Write>(conf: &Conf, mut writer: &mut W) -> Result<
             if let Some(velocity) = atom.velocity {
                 write!(
                     &mut writer,
-                    "{:>8.3}{:>8.3}{:>8.3}",
+                    "{:>8.4}{:>8.4}{:>8.4}",
                     velocity.x, velocity.y, velocity.z
                 )?;
             }
@@ -318,10 +318,10 @@ mod tests {
             "\
 {}
 4
-{:>5}{:<5}{:>5}{:>5}{:>8.3}{:>8.3}{:>8.3}{:>8.3}{:>8.3}{:>8.3}
-{:>5}{:<5}{:>5}{:>5}{:>8.3}{:>8.3}{:>8.3}{:>8.3}{:>8.3}{:>8.3}
-{:>5}{:<5}{:>5}{:>5}{:>8.3}{:>8.3}{:>8.3}{:>8.3}{:>8.3}{:>8.3}
-{:>5}{:<5}{:>5}{:>5}{:>8.3}{:>8.3}{:>8.3}{:>8.3}{:>8.3}{:>8.3}
+{:>5}{:<5}{:>5}{:>5}{:>8.3}{:>8.3}{:>8.3}{:>8.4}{:>8.4}{:>8.4}
+{:>5}{:<5}{:>5}{:>5}{:>8.3}{:>8.3}{:>8.3}{:>8.4}{:>8.4}{:>8.4}
+{:>5}{:<5}{:>5}{:>5}{:>8.3}{:>8.3}{:>8.3}{:>8.4}{:>8.4}{:>8.4}
+{:>5}{:<5}{:>5}{:>5}{:>8.3}{:>8.3}{:>8.3}{:>8.4}{:>8.4}{:>8.4}
 {:12.3} {:12.3} {:12.3}
 ",
             title,
@@ -635,5 +635,65 @@ mod tests {
         let atom_name = &tail[10..15];
         assert_eq!(residue_name, "RES1 ");
         assert_eq!(atom_name, "  AT1");
+    }
+
+    #[test]
+    fn write_conf_with_3_digit_position_precision_and_four_digit_velocity_precision() {
+        let residues = vec![
+            Rc::new(RefCell::new(Residue {
+                name: Rc::new(RefCell::new("RES1".to_string())),
+                atoms: vec![Rc::new(RefCell::new("AT1".to_string()))],
+            })),
+        ];
+
+        let conf = Conf {
+            title: "A title".to_string(),
+            origin: RVec::default(),
+            size: RVec::default(),
+            residues: residues.clone(),
+            atoms: vec![
+                Atom {
+                    name: Rc::clone(&residues[0].borrow().atoms[0]),
+                    residue: Rc::clone(&residues[0]),
+                    position: RVec {
+                        x: 0.0,
+                        y: 1.0,
+                        z: 2.0,
+                    },
+                    velocity: Some(RVec {
+                        x: 0.0,
+                        y: 0.1,
+                        z: 0.2,
+                    }),
+                },
+            ],
+        };
+
+        // Write the configuration to a buffer
+        let mut buf = Cursor::new(Vec::<u8>::new());
+        assert!(write_gromos87_conf(&conf, &mut buf).is_ok());
+
+        buf.set_position(0);
+        let line = buf.lines().skip(2).next().unwrap().unwrap();
+
+        let x = line[20..28].to_string();
+        let y = line[28..36].to_string();
+        let z = line[36..44].to_string();
+
+        let vx = line[44..52].to_string();
+        let vy = line[52..60].to_string();
+        let vz = line[60..68].to_string();
+
+        for position in vec![x, y, z] {
+            let parts: Vec<_> = position.splitn(2, '.').collect();
+            assert_eq!(parts[0].len(), 4);
+            assert_eq!(parts[1].len(), 3);
+        }
+
+        for velocity in vec![vx, vy, vz] {
+            let parts: Vec<_> = velocity.splitn(2, '.').collect();
+            assert_eq!(parts[0].len(), 3);
+            assert_eq!(parts[1].len(), 4);
+        }
     }
 }

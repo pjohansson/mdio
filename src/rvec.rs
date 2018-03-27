@@ -1,3 +1,4 @@
+use std::default::Default;
 use std::f64;
 use std::ops::{Add, AddAssign, Neg, Sub, SubAssign};
 
@@ -90,6 +91,16 @@ impl RVec {
 
     pub fn to_tuple(&self) -> (f64, f64, f64) {
         (self.x, self.y, self.z)
+    }
+}
+
+impl Default for RVec {
+    fn default() -> RVec {
+        RVec {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        }
     }
 }
 
@@ -434,5 +445,16 @@ mod tests {
         let dr_x = ((r1.z - r2.z).powi(2) + (r1.y - r2.y).powi(2)).sqrt();
         let dh_x = r1.x - r2.x;
         assert_eq!(r1.distance_cylindrical(&r2, Direction::X), (dr_x, dh_x));
+    }
+
+    #[test]
+    fn rvec_default_is_origo() {
+        let origo = RVec {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+
+        assert_eq!(origo, RVec::default());
     }
 }
