@@ -192,6 +192,18 @@ pub struct Atom {
     pub velocity: Option<RVec>,
 }
 
+impl Atom {
+    /// Compare the atom's name to an input name.
+    pub fn cmp_atom_name(&self, to_name: &str) -> bool {
+        &*self.name.borrow() == to_name
+    }
+
+    /// Compare the atom's parent residue name to an input name.
+    pub fn cmp_residue_name(&self, to_name: &str) -> bool {
+        &*self.residue.borrow().name.borrow() == to_name
+    }
+}
+
 fn get_or_insert_residue(
     name: &str,
     residues: &mut Vec<Rc<RefCell<Residue>>>,
@@ -1144,5 +1156,33 @@ mod tests {
             assert_eq!(atom1.position, atom2.position);
             assert_eq!(atom1.velocity, atom2.velocity);
         }
+    }
+
+    #[test]
+    fn compare_atom_name_and_residue_name_to_input() {
+        let residue = Rc::new(RefCell::new(Residue {
+            name: Rc::new(RefCell::new("RES1".to_string())),
+            atoms: vec![
+                Rc::new(RefCell::new("AT1".to_string())),
+                Rc::new(RefCell::new("AT2".to_string())),
+            ],
+        }));
+
+        let atom = Atom {
+            name: residue.borrow().atoms[0].clone(),
+            residue: residue.clone(),
+            position: RVec {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            velocity: None,
+        };
+
+        assert!(atom.cmp_atom_name("AT1"));
+        assert!(!atom.cmp_atom_name("AT2"));
+
+        assert!(atom.cmp_residue_name("RES1"));
+        assert!(!atom.cmp_residue_name("RES2"));
     }
 }
